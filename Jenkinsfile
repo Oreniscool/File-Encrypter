@@ -1,49 +1,71 @@
 pipeline {
     agent any
+
     stages {
         stage('Build') {
             steps {
-                // Use dir() to keep all commands scoped to the project folder
                 dir("Password Protection") {
                     sh '''
                     echo "Building Java project..."
                     mkdir -p build
                     javac -d build src/*.java
+                    echo "Build successful"
                     '''
                 }
             }
         }
+
         stage('Test') {
             steps {
                 dir("Password Protection") {
                     sh '''
+                    echo "Running JUnit tests for File-Encrypter..."
+                    
+                    # Download JUnit jar if not already present
                     if [ ! -f junit-platform-console-standalone.jar ]; then
-                        curl -L -o junit-platform-console-standalone.jar "https://repo1.maven.org/maven2/org/junit/platform/junit-platform-console-standalone/1.10.0/junit-platform-console-standalone-1.10.0.jar"
+                        echo "Downloading JUnit..."
+                        curl -L -o junit-platform-console-standalone.jar \
+                        "https://repo1.maven.org/maven2/org/junit/platform/junit-platform-console-standalone/1.10.0/junit-platform-console-standalone-1.10.0.jar"
                     fi
-                    
+
+                    # Compile test files
                     mkdir -p test-build
-                    # Ensure the classpath points correctly to the build folder created earlier
                     javac -cp junit-platform-console-standalone.jar:build -d test-build test/*.java
-                    
-                    java -jar junit-platform-console-standalone.jar \
+
+                    # Run JUnit tests using the 'execute' command to avoid deprecation warnings
+                    java -jar junit-platform-console-standalone.jar execute \
                         --class-path build:test-build \
                         --scan-class-path
+                    
+                    echo "JUnit tests executed successfully"
                     '''
                 }
             }
         }
+
         stage('Deploy') {
             steps {
                 dir("Password Protection") {
-                    sh 'jar cf FileEncrypter.jar -C build .'
-                    // Archive the artifact so it doesn't just disappear when the job ends
-                    archiveArtifacts artifacts: 'Password Protection/*.jar', fingerprint: true
+                    sh '''
+                    echo "Deploying (Packaging) File-Encrypter Application..."
+                    # Create executable artifact (JAR)
+                    jar cf FileEncrypter.jar -C build .
+                    echo "Deployment successful - Artifact ready"
+                    '''
+                    // Fixed path: Since we are inside the 'Password Protection' dir, 
+                    // we look for the jar in the current folder (.)
+                    archiveArtifacts artifacts: '*.jar', fingerprint: true
                 }
             }
         }
     }
+
     post {
-        success { echo "Pipeline executed successfully!" }
-        failure { echo "Pipeline failed!" }
+        success {
+            echo "Pipeline executed successfully!"
+        }
+        failure {
+            echo "Pipeline failed!"
+        }
     }
 }
